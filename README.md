@@ -2,4 +2,4 @@
 
 see : https://www.w3.org/People/Berners-Lee/WorldWideWeb.html
 
-![Screenshot](images/screensnap2_24c.gif)
+![Screenshot](https://raw.githubusercontent.com/melvincarvalho/worldwideweb/master/image/screensnap2_24c.gif)
