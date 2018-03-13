@@ -9630,186 +9630,6 @@ module.exports.default = module.exports;
 
 /***/ }),
 
-/***/ "./node_modules/better-simple-slideshow/js/better-simple-slideshow.js":
-/*!****************************************************************************!*\
-  !*** ./node_modules/better-simple-slideshow/js/better-simple-slideshow.js ***!
-  \****************************************************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-
-var makeBSS = function (el, options) {
-    if (typeof document === 'undefined') {
-      var document = options.dom;
-    }
-    var $slideshows = document.querySelectorAll(el), // a collection of all of the slideshow
-        $slideshow = {},
-        Slideshow = {
-            init: function (el, options) {
-                this.counter = 0; // to keep track of current slide
-                this.el = el; // current slideshow container
-                this.$items = el.querySelectorAll('figure'); // a collection of all of the slides, caching for performance
-                this.numItems = this.$items.length; // total number of slides
-                options = options || {}; // if options object not passed in, then set to empty object
-                options.auto = options.auto || false; // if options.auto object not passed in, then set to false
-                this.opts = {
-                    auto: (typeof options.auto === "undefined") ? false : options.auto,
-                    speed: (typeof options.auto.speed === "undefined") ? 1500 : options.auto.speed,
-                    pauseOnHover: (typeof options.auto.pauseOnHover === "undefined") ? false : options.auto.pauseOnHover,
-                    fullScreen: (typeof options.fullScreen === "undefined") ? false : options.fullScreen,
-                    swipe: (typeof options.swipe === "undefined") ? false : options.swipe
-                };
-
-                this.$items[0].classList.add('bss-show'); // add show class to first figure
-                this.injectControls(el);
-                this.addEventListeners(el);
-                if (this.opts.auto) {
-                    this.autoCycle(this.el, this.opts.speed, this.opts.pauseOnHover);
-                }
-                if (this.opts.fullScreen) {
-                    this.addFullScreen(this.el);
-                }
-                if (this.opts.swipe) {
-                    this.addSwipe(this.el);
-                }
-            },
-            showCurrent: function (i) {
-                // increment or decrement this.counter depending on whether i === 1 or i === -1
-                if (i > 0) {
-                    this.counter = (this.counter + 1 === this.numItems) ? 0 : this.counter + 1;
-                } else {
-                    this.counter = (this.counter - 1 < 0) ? this.numItems - 1 : this.counter - 1;
-                }
-
-                // remove .show from whichever element currently has it
-                // http://stackoverflow.com/a/16053538/2006057
-                [].forEach.call(this.$items, function (el) {
-                    el.classList.remove('bss-show');
-                });
-
-                // add .show to the one item that's supposed to have it
-                this.$items[this.counter].classList.add('bss-show');
-            },
-            injectControls: function (el) {
-            // build and inject prev/next controls
-                // first create all the new elements
-                var spanPrev = document.createElement("span"),
-                    spanNext = document.createElement("span"),
-                    docFrag = document.createDocumentFragment();
-
-                // add classes
-                spanPrev.classList.add('bss-prev');
-                spanNext.classList.add('bss-next');
-
-                // add contents
-                spanPrev.innerHTML = '&laquo;';
-                spanNext.innerHTML = '&raquo;';
-
-                // append elements to fragment, then append fragment to DOM
-                docFrag.appendChild(spanPrev);
-                docFrag.appendChild(spanNext);
-                el.appendChild(docFrag);
-            },
-            addEventListeners: function (el) {
-                var that = this;
-                el.querySelector('.bss-next').addEventListener('click', function () {
-                    that.showCurrent(1); // increment & show
-                }, false);
-
-                el.querySelector('.bss-prev').addEventListener('click', function () {
-                    that.showCurrent(-1); // decrement & show
-                }, false);
-
-                el.onkeydown = function (e) {
-                    e = e || window.event;
-                    if (e.keyCode === 37) {
-                        that.showCurrent(-1); // decrement & show
-                    } else if (e.keyCode === 39) {
-                        that.showCurrent(1); // increment & show
-                    }
-                };
-            },
-            autoCycle: function (el, speed, pauseOnHover) {
-                var that = this,
-                    interval = window.setInterval(function () {
-                        that.showCurrent(1); // increment & show
-                    }, speed);
-
-                if (pauseOnHover) {
-                    el.addEventListener('mouseover', function () {
-                        interval = clearInterval(interval);
-                    }, false);
-                    el.addEventListener('mouseout', function () {
-                        interval = window.setInterval(function () {
-                            that.showCurrent(1); // increment & show
-                        }, speed);
-                    }, false);
-                } // end pauseonhover
-
-            },
-            addFullScreen: function(el){
-                var that = this,
-                fsControl = document.createElement("span");
-
-                fsControl.classList.add('bss-fullscreen');
-                el.appendChild(fsControl);
-                el.querySelector('.bss-fullscreen').addEventListener('click', function () {
-                    that.toggleFullScreen(el);
-                }, false);
-            },
-            addSwipe: function(el){
-                var that = this,
-                    ht = new Hammer(el);
-                ht.on('swiperight', function(e) {
-                    that.showCurrent(-1); // decrement & show
-                });
-                ht.on('swipeleft', function(e) {
-                    that.showCurrent(1); // increment & show
-                });
-            },
-            toggleFullScreen: function(el){
-                // https://developer.mozilla.org/en-US/docs/Web/Guide/API/DOM/Using_full_screen_mode
-                if (!document.fullscreenElement &&    // alternative standard method
-                    !document.mozFullScreenElement && !document.webkitFullscreenElement &&
-                    !document.msFullscreenElement ) {  // current working methods
-                    if (document.documentElement.requestFullscreen) {
-                      el.requestFullscreen();
-                    } else if (document.documentElement.msRequestFullscreen) {
-                      el.msRequestFullscreen();
-                    } else if (document.documentElement.mozRequestFullScreen) {
-                      el.mozRequestFullScreen();
-                    } else if (document.documentElement.webkitRequestFullscreen) {
-                      el.webkitRequestFullscreen(el.ALLOW_KEYBOARD_INPUT);
-                    }
-                } else {
-                    if (document.exitFullscreen) {
-                      document.exitFullscreen();
-                    } else if (document.msExitFullscreen) {
-                      document.msExitFullscreen();
-                    } else if (document.mozCancelFullScreen) {
-                      document.mozCancelFullScreen();
-                    } else if (document.webkitExitFullscreen) {
-                      document.webkitExitFullscreen();
-                    }
-                }
-            } // end toggleFullScreen
-
-        }; // end Slideshow object .....
-
-    // make instances of Slideshow as needed
-    [].forEach.call($slideshows, function (el) {
-        $slideshow = Object.create(Slideshow);
-        $slideshow.init(el, options);
-    });
-};
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = makeBSS
-}
-
-
-/***/ }),
-
 /***/ "./node_modules/brorand/index.js":
 /*!***************************************!*\
   !*** ./node_modules/brorand/index.js ***!
@@ -91515,6 +91335,9 @@ register(__webpack_require__(/*! ./slideshow/slideshowPane.js */ "./node_modules
 register(__webpack_require__(/*! ./socialPane.js */ "./node_modules/solid-panes/socialPane.js"))
 
 register(__webpack_require__(/*! ./humanReadablePane.js */ "./node_modules/solid-panes/humanReadablePane.js")) // A web page as a web page -- how to escape to tabr?
+
+register(__webpack_require__(/*! ./source/sourcePane.js */ "./node_modules/solid-panes/source/sourcePane.js")) // edit source
+
 register(__webpack_require__(/*! ./dataContentPane.js */ "./node_modules/solid-panes/dataContentPane.js")) // Prefered for a data file
 register(__webpack_require__(/*! ./n3Pane.js */ "./node_modules/solid-panes/n3Pane.js"))
 register(__webpack_require__(/*! ./RDFXMLPane.js */ "./node_modules/solid-panes/RDFXMLPane.js"))
@@ -92544,6 +92367,9 @@ f:settings a :Form;
 */
 /* global FileReader */
 
+// const VideoRoomPrefix = 'https://appear.in/'
+const VideoRoomPrefix = 'https://meet.jit.si/rdflib-rdfext '
+
 var UI = __webpack_require__(/*! solid-ui */ "./node_modules/solid-ui/lib/index.js")
 var panes = __webpack_require__(/*! ../paneRegistry */ "./node_modules/solid-panes/paneRegistry.js")
 
@@ -93124,7 +92950,7 @@ module.exports = {
 
     var makeVideoCall = function (toolObject) {
       var kb = UI.store
-      var newInstance = $rdf.sym('https://appear.in/' + UI.utils.genUuid())
+      var newInstance = $rdf.sym(VideoRoomPrefix + UI.utils.genUuid())
 
       if (kb.holds(meeting, ns.meeting('videoCallPage'))) {
         console.log('Ignored - already have a videoCallPage')
@@ -94630,6 +94456,186 @@ module.exports = {
 
 /***/ }),
 
+/***/ "./node_modules/solid-panes/node_modules/better-simple-slideshow/js/better-simple-slideshow.js":
+/*!*****************************************************************************************************!*\
+  !*** ./node_modules/solid-panes/node_modules/better-simple-slideshow/js/better-simple-slideshow.js ***!
+  \*****************************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+
+var makeBSS = function (el, options) {
+    if (typeof document === 'undefined') {
+      var document = options.dom;
+    }
+    var $slideshows = document.querySelectorAll(el), // a collection of all of the slideshow
+        $slideshow = {},
+        Slideshow = {
+            init: function (el, options) {
+                this.counter = 0; // to keep track of current slide
+                this.el = el; // current slideshow container
+                this.$items = el.querySelectorAll('figure'); // a collection of all of the slides, caching for performance
+                this.numItems = this.$items.length; // total number of slides
+                options = options || {}; // if options object not passed in, then set to empty object
+                options.auto = options.auto || false; // if options.auto object not passed in, then set to false
+                this.opts = {
+                    auto: (typeof options.auto === "undefined") ? false : options.auto,
+                    speed: (typeof options.auto.speed === "undefined") ? 1500 : options.auto.speed,
+                    pauseOnHover: (typeof options.auto.pauseOnHover === "undefined") ? false : options.auto.pauseOnHover,
+                    fullScreen: (typeof options.fullScreen === "undefined") ? false : options.fullScreen,
+                    swipe: (typeof options.swipe === "undefined") ? false : options.swipe
+                };
+
+                this.$items[0].classList.add('bss-show'); // add show class to first figure
+                this.injectControls(el);
+                this.addEventListeners(el);
+                if (this.opts.auto) {
+                    this.autoCycle(this.el, this.opts.speed, this.opts.pauseOnHover);
+                }
+                if (this.opts.fullScreen) {
+                    this.addFullScreen(this.el);
+                }
+                if (this.opts.swipe) {
+                    this.addSwipe(this.el);
+                }
+            },
+            showCurrent: function (i) {
+                // increment or decrement this.counter depending on whether i === 1 or i === -1
+                if (i > 0) {
+                    this.counter = (this.counter + 1 === this.numItems) ? 0 : this.counter + 1;
+                } else {
+                    this.counter = (this.counter - 1 < 0) ? this.numItems - 1 : this.counter - 1;
+                }
+
+                // remove .show from whichever element currently has it
+                // http://stackoverflow.com/a/16053538/2006057
+                [].forEach.call(this.$items, function (el) {
+                    el.classList.remove('bss-show');
+                });
+
+                // add .show to the one item that's supposed to have it
+                this.$items[this.counter].classList.add('bss-show');
+            },
+            injectControls: function (el) {
+            // build and inject prev/next controls
+                // first create all the new elements
+                var spanPrev = document.createElement("span"),
+                    spanNext = document.createElement("span"),
+                    docFrag = document.createDocumentFragment();
+
+                // add classes
+                spanPrev.classList.add('bss-prev');
+                spanNext.classList.add('bss-next');
+
+                // add contents
+                spanPrev.innerHTML = '&laquo;';
+                spanNext.innerHTML = '&raquo;';
+
+                // append elements to fragment, then append fragment to DOM
+                docFrag.appendChild(spanPrev);
+                docFrag.appendChild(spanNext);
+                el.appendChild(docFrag);
+            },
+            addEventListeners: function (el) {
+                var that = this;
+                el.querySelector('.bss-next').addEventListener('click', function () {
+                    that.showCurrent(1); // increment & show
+                }, false);
+
+                el.querySelector('.bss-prev').addEventListener('click', function () {
+                    that.showCurrent(-1); // decrement & show
+                }, false);
+
+                el.onkeydown = function (e) {
+                    e = e || window.event;
+                    if (e.keyCode === 37) {
+                        that.showCurrent(-1); // decrement & show
+                    } else if (e.keyCode === 39) {
+                        that.showCurrent(1); // increment & show
+                    }
+                };
+            },
+            autoCycle: function (el, speed, pauseOnHover) {
+                var that = this,
+                    interval = window.setInterval(function () {
+                        that.showCurrent(1); // increment & show
+                    }, speed);
+
+                if (pauseOnHover) {
+                    el.addEventListener('mouseover', function () {
+                        interval = clearInterval(interval);
+                    }, false);
+                    el.addEventListener('mouseout', function () {
+                        interval = window.setInterval(function () {
+                            that.showCurrent(1); // increment & show
+                        }, speed);
+                    }, false);
+                } // end pauseonhover
+
+            },
+            addFullScreen: function(el){
+                var that = this,
+                fsControl = document.createElement("span");
+
+                fsControl.classList.add('bss-fullscreen');
+                el.appendChild(fsControl);
+                el.querySelector('.bss-fullscreen').addEventListener('click', function () {
+                    that.toggleFullScreen(el);
+                }, false);
+            },
+            addSwipe: function(el){
+                var that = this,
+                    ht = new Hammer(el);
+                ht.on('swiperight', function(e) {
+                    that.showCurrent(-1); // decrement & show
+                });
+                ht.on('swipeleft', function(e) {
+                    that.showCurrent(1); // increment & show
+                });
+            },
+            toggleFullScreen: function(el){
+                // https://developer.mozilla.org/en-US/docs/Web/Guide/API/DOM/Using_full_screen_mode
+                if (!document.fullscreenElement &&    // alternative standard method
+                    !document.mozFullScreenElement && !document.webkitFullscreenElement &&
+                    !document.msFullscreenElement ) {  // current working methods
+                    if (document.documentElement.requestFullscreen) {
+                      el.requestFullscreen();
+                    } else if (document.documentElement.msRequestFullscreen) {
+                      el.msRequestFullscreen();
+                    } else if (document.documentElement.mozRequestFullScreen) {
+                      el.mozRequestFullScreen();
+                    } else if (document.documentElement.webkitRequestFullscreen) {
+                      el.webkitRequestFullscreen(el.ALLOW_KEYBOARD_INPUT);
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                      document.exitFullscreen();
+                    } else if (document.msExitFullscreen) {
+                      document.msExitFullscreen();
+                    } else if (document.mozCancelFullScreen) {
+                      document.mozCancelFullScreen();
+                    } else if (document.webkitExitFullscreen) {
+                      document.webkitExitFullscreen();
+                    }
+                }
+            } // end toggleFullScreen
+
+        }; // end Slideshow object .....
+
+    // make instances of Slideshow as needed
+    [].forEach.call($slideshows, function (el) {
+        $slideshow = Object.create(Slideshow);
+        $slideshow.init(el, options);
+    });
+};
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = makeBSS
+}
+
+
+/***/ }),
+
 /***/ "./node_modules/solid-panes/outline/dragDrop.js":
 /*!******************************************************!*\
   !*** ./node_modules/solid-panes/outline/dragDrop.js ***!
@@ -95508,6 +95514,7 @@ module.exports = function (doc) {
 
     if (!table) { // Create a new property table
       table = dom.createElement('table')
+      table.setAttribute('style', 'width: 100%;')
       var tr1 = expandedHeaderTR(subject, pane, options)
       table.appendChild(tr1)
 
@@ -96822,6 +96829,7 @@ module.exports = function (doc) {
     } else if (obj.termType === 'Collection') {
         // obj.elements is an array of the elements in the collection
       rep = dom.createElement('table')
+      table.setAttribute('style', 'width: 100%;')
       rep.setAttribute('about', obj.toNT())
         /* Not sure which looks best -- with or without. I think without
 
@@ -100917,7 +100925,7 @@ var UI = __webpack_require__(/*! solid-ui */ "./node_modules/solid-ui/lib/index.
 
 // tabulator.loadScript("js/panes/slideshow/better-simple-slideshow/js/better-simple-slideshow.js")
 
-var makeBSS = __webpack_require__(/*! better-simple-slideshow */ "./node_modules/better-simple-slideshow/js/better-simple-slideshow.js")
+var makeBSS = __webpack_require__(/*! better-simple-slideshow */ "./node_modules/solid-panes/node_modules/better-simple-slideshow/js/better-simple-slideshow.js")
 // load also js/panes/slideshow/better-simple-slideshow/css/simple-slideshow-styles.css
 
 module.exports = {
@@ -101439,6 +101447,179 @@ module.exports = {
 
 } //
 // ends
+
+
+/***/ }),
+
+/***/ "./node_modules/solid-panes/source/sourcePane.js":
+/*!*******************************************************!*\
+  !*** ./node_modules/solid-panes/source/sourcePane.js ***!
+  \*******************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+/*      Source editor Pane
+**
+**  This pane allows the original source of a resource to be edited by hand
+*/
+const nodeMode = (typeof module !== 'undefined')
+var panes, UI
+
+if (nodeMode) {
+  UI = __webpack_require__(/*! solid-ui */ "./node_modules/solid-ui/lib/index.js")
+} else { // Add to existing mashlib
+  panes = window.panes
+  UI = panes.UI
+}
+
+const thisPane = {
+  icon: UI.icons.iconBase + 'noun_109873.svg', // noun_109873_51A7F9.svg
+
+  name: 'source',
+
+  label: function (subject) {
+    const kb = UI.store
+    var typeURIs = kb.findTypeURIs(subject)
+    var prefix = $rdf.Util.mediaTypeClass('text/*').uri.split('*')[0]
+    for (var t in typeURIs) {
+      if (t.startsWith(prefix)) return 'Source'
+      if (t.includes('xml')) return 'XML Source'
+    }
+    return null
+  },
+
+  render: function (subject, dom) {
+    const kb = UI.store
+    const fetcher = kb.fetcher
+    const editStyle = 'font-family: monospace; font-size: 100%; min-width:60em; margin: 1em 0.2em 1em 0.2em; padding: 1em; border: 0.1em solid #888; border-radius: 0.5em;'
+    var readonly = true
+    var editing = false
+    var broken = false
+    var contentType, eTag // Note it when we read and use it when we save
+
+    var div = dom.createElement('div')
+    div.setAttribute('class', 'sourcePane')
+    var table = div.appendChild(dom.createElement('table'))
+    var main = table.appendChild(dom.createElement('tr'))
+    var statusRow = table.appendChild(dom.createElement('tr'))
+    var controls = table.appendChild(dom.createElement('tr'))
+    controls.setAttribute('style', 'text-align: right;')
+
+    var textArea = main.appendChild(dom.createElement('textarea'))
+    textArea.setAttribute('style', editStyle)
+
+    function editButton (dom) {
+      return UI.widgets.button(dom, UI.icons.iconBase + 'noun_253504.svg', 'Edit')
+    }
+
+    var cancelButton = controls.appendChild(UI.widgets.cancelButton(dom))
+    var saveButton = controls.appendChild(UI.widgets.continueButton(dom))
+    var myEditButton = controls.appendChild(editButton(dom))
+
+    function setUnedited () {
+      if (broken) return
+      editing = false
+      myEditButton.style.visibility = 'visible'
+      textArea.style.color = '#888'
+      cancelButton.style.visibility = 'collapse'
+      saveButton.style.visibility = 'collapse'
+      textArea.setAttribute('readonly', 'true')
+    }
+    function setEditable () {
+      if (broken) return
+      editing = true
+      textArea.style.color = 'black'
+      cancelButton.style.visibility = 'visible'
+      saveButton.style.visibility = 'visible'
+      myEditButton.style.visibility = 'collapse'
+      textArea.removeAttribute('readonly')
+    }
+    function setEdited (event) {
+      if (broken || !editing) return
+      textArea.style.color = 'green'
+      cancelButton.style.visibility = 'visible'
+      saveButton.style.visibility = 'visible'
+      myEditButton.style.visibility = 'collapse'
+      textArea.removeAttribute('readonly')
+    }
+    function saveBack (e) {
+      var options =  { data: textArea.value, contentType: contentType }
+      if (eTag) options.headers = {'if-match': eTag} // avoid overwriting changed files -> status 412
+      fetcher.webOperation('PUT', subject.uri, options)
+      .then(function (response) {
+        if (!happy(response, 'PUT')) return
+        setEditable()
+      })
+      .catch(function (err) {
+        div.appendChild(UI.utils.errorMessageBlock(dom, 'Error saving back: ' + err))
+      })
+    }
+
+    function happy (response) {
+      if (!response.ok) {
+        let msg = 'HTTP error! Status: ' + response.statusRow
+        console.log(msg)
+        if (response.status === 412) msg = 'Error: File changed by someone else'
+        statusRow.appendChild(UI.widgets.errorMessageBlock(dom, msg))
+      }
+      return response.ok
+    }
+
+    function refresh (event) {
+      fetcher.webOperation('GET', subject.uri).then(function (response) {
+        if (!happy(response, 'GET')) return
+        var desc = response.responseText
+        textArea.rows = desc ? desc.split('\n').length + 2 : 2
+        textArea.cols = 80
+        textArea.value = desc
+
+        setUnedited()
+        var contentType, allowed
+        let rrr = kb.any(response.req, kb.sym('http://www.w3.org/2007/ont/link#response'))
+        if (rrr) {
+          contentType = kb.anyValue(rrr, UI.ns.httph('content-type'))
+          allowed = kb.anyValue(rrr, UI.ns.httph('allow'))
+          eTag = kb.anyValue(rrr, UI.ns.httph('etag'))
+          if (!eTag) console.log('sourcePane: No eTag on GET')
+        }
+        // contentType = response.headers['content-type'] // Not available ?!
+        if (!contentType) {
+          readonly = true
+          broken = true
+          statusRow.appendChild(UI.widgets.errorMessageBlock(dom, 'Error: No content-type available!'))
+          return
+        }
+        console.log('       source content-type ' + contentType)
+        // let allowed = response.headers['allow']
+        if (!allowed) {
+          console.log('@@@@@@@@@@ No Allow: header from this server')
+          readonly = false // better allow just in case
+        } else {
+          readonly = allowed.indexOf('PUT') < 0 // In future more info re ACL allow?
+        }
+        textArea.readonly = readonly
+      }).catch(err => {
+        div.appendChild(UI.widgets.errorMessageBlock(dom, 'Error reading file: ' + err))
+      })
+    }
+
+    textArea.addEventListener('keyup', setEdited)
+    myEditButton.addEventListener('click', setEditable)
+    cancelButton.addEventListener('click', refresh)
+    saveButton.addEventListener('click', saveBack)
+
+    refresh()
+    return div
+  }
+}
+
+if (nodeMode) {
+  module.exports = thisPane
+} else {
+  console.log('*** patching in live pane: ' + thisPane.name)
+  panes.register(thisPane)
+}
+// ENDS
 
 
 /***/ }),
