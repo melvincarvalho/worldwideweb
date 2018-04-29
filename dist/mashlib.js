@@ -62594,9 +62594,7 @@ var substr = 'ab'.substr(-1) === 'b'
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-
 exports.pbkdf2 = __webpack_require__(/*! ./lib/async */ "./node_modules/pbkdf2/lib/async.js")
-
 exports.pbkdf2Sync = __webpack_require__(/*! ./lib/sync */ "./node_modules/pbkdf2/lib/sync-browser.js")
 
 
@@ -62648,6 +62646,7 @@ function checkNative (algo) {
   checks[algo] = prom
   return prom
 }
+
 function browserPbkdf2 (password, salt, iterations, length, algo) {
   return subtle.importKey(
     'raw', password, {name: 'PBKDF2'}, false, ['deriveBits']
@@ -62664,6 +62663,7 @@ function browserPbkdf2 (password, salt, iterations, length, algo) {
     return Buffer.from(res)
   })
 }
+
 function resolvePromise (promise, callback) {
   promise.then(function (out) {
     process.nextTick(function () {
@@ -62676,18 +62676,14 @@ function resolvePromise (promise, callback) {
   })
 }
 module.exports = function (password, salt, iterations, keylen, digest, callback) {
-  if (!Buffer.isBuffer(password)) password = Buffer.from(password, defaultEncoding)
-  if (!Buffer.isBuffer(salt)) salt = Buffer.from(salt, defaultEncoding)
-
-  checkParameters(iterations, keylen)
   if (typeof digest === 'function') {
     callback = digest
     digest = undefined
   }
-  if (typeof callback !== 'function') throw new Error('No callback provided to pbkdf2')
 
   digest = digest || 'sha1'
   var algo = toBrowser[digest.toLowerCase()]
+
   if (!algo || typeof global.Promise !== 'function') {
     return process.nextTick(function () {
       var out
@@ -62699,12 +62695,16 @@ module.exports = function (password, salt, iterations, keylen, digest, callback)
       callback(null, out)
     })
   }
+
+  checkParameters(password, salt, iterations, keylen)
+  if (typeof callback !== 'function') throw new Error('No callback provided to pbkdf2')
+  if (!Buffer.isBuffer(password)) password = Buffer.from(password, defaultEncoding)
+  if (!Buffer.isBuffer(salt)) salt = Buffer.from(salt, defaultEncoding)
+
   resolvePromise(checkNative(algo).then(function (resp) {
-    if (resp) {
-      return browserPbkdf2(password, salt, iterations, keylen, algo)
-    } else {
-      return sync(password, salt, iterations, keylen, digest)
-    }
+    if (resp) return browserPbkdf2(password, salt, iterations, keylen, algo)
+
+    return sync(password, salt, iterations, keylen, digest)
   }), callback)
 }
 
@@ -62739,10 +62739,20 @@ module.exports = defaultEncoding
   !*** ./node_modules/pbkdf2/lib/precondition.js ***!
   \*************************************************/
 /*! no static exports found */
-/***/ (function(module, exports) {
+/***/ (function(module, exports, __webpack_require__) {
 
-var MAX_ALLOC = Math.pow(2, 30) - 1 // default in iojs
-module.exports = function (iterations, keylen) {
+/* WEBPACK VAR INJECTION */(function(Buffer) {var MAX_ALLOC = Math.pow(2, 30) - 1 // default in iojs
+
+function checkBuffer (buf, name) {
+  if (typeof buf !== 'string' && !Buffer.isBuffer(buf)) {
+    throw new TypeError(name + ' must be a buffer or string')
+  }
+}
+
+module.exports = function (password, salt, iterations, keylen) {
+  checkBuffer(password, 'Password')
+  checkBuffer(salt, 'Salt')
+
   if (typeof iterations !== 'number') {
     throw new TypeError('Iterations not a number')
   }
@@ -62760,6 +62770,7 @@ module.exports = function (iterations, keylen) {
   }
 }
 
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../buffer/index.js */ "./node_modules/buffer/index.js").Buffer))
 
 /***/ }),
 
@@ -62835,10 +62846,10 @@ function getDigest (alg) {
 }
 
 function pbkdf2 (password, salt, iterations, keylen, digest) {
+  checkParameters(password, salt, iterations, keylen)
+
   if (!Buffer.isBuffer(password)) password = Buffer.from(password, defaultEncoding)
   if (!Buffer.isBuffer(salt)) salt = Buffer.from(salt, defaultEncoding)
-
-  checkParameters(iterations, keylen)
 
   digest = digest || 'sha1'
 
@@ -88158,7 +88169,7 @@ module.exports = {
         console.log('Logged in as ' + context.me)
         me = context.me
       }, err => {
-        div.appendChild(UI.utils.errorMessageBlock(err))
+        div.appendChild(UI.widgets.errorMessageBlock(err))
       })
     } else {
       // console.log("(Your webid is "+ me +")")
@@ -101404,16 +101415,8 @@ module.exports = {
 **
 */
 /* global alert */
-const nodeMode = (typeof module !== 'undefined')
-var panes, UI
 
-if (nodeMode) {
-  UI = __webpack_require__(/*! solid-ui */ "./node_modules/solid-ui/lib/index.js")
-} else { // Add to existing mashlib
-  panes = window.panes
-  UI = panes.UI
-}
-
+const UI = __webpack_require__(/*! solid-ui */ "./node_modules/solid-ui/lib/index.js")
 const mime = __webpack_require__(/*! mime-types */ "./node_modules/mime-types/index.js")
 const kb = UI.store
 
@@ -101472,7 +101475,8 @@ const thisPane = {
     var readonly = true
     var editing = false
     var broken = false
-    var contentType, eTag // Note it when we read and use it when we save
+    // Set in refresh()
+    var contentType, allowed, eTag // Note it when we read and use it when we save
 
     var div = dom.createElement('div')
     div.setAttribute('class', 'sourcePane')
@@ -101528,7 +101532,7 @@ const thisPane = {
         setEditable()
       })
       .catch(function (err) {
-        div.appendChild(UI.utils.errorMessageBlock(dom, 'Error saving back: ' + err))
+        div.appendChild(UI.widgets.errorMessageBlock(dom, 'Error saving back: ' + err))
       })
     }
 
@@ -101551,14 +101555,22 @@ const thisPane = {
         textArea.value = desc
 
         setUnedited()
-        var contentType, allowed
-        let rrr = kb.any(response.req, kb.sym('http://www.w3.org/2007/ont/link#response'))
-        if (rrr) {
-          contentType = kb.anyValue(rrr, UI.ns.httph('content-type'))
-          allowed = kb.anyValue(rrr, UI.ns.httph('allow'))
-          eTag = kb.anyValue(rrr, UI.ns.httph('etag'))
-          if (!eTag) console.log('sourcePane: No eTag on GET')
+        if (response.headers && response.headers.get('content-type')) {
+          contentType = response.headers.get('content-type') // Should work but headers may be empty
+          allowed = response.headers.get('allow')
+          eTag = response.headers.get('etag')
         }
+
+        let reqs = kb.each(null, kb.sym('http://www.w3.org/2007/ont/link#requestedURI'), subject.uri)
+        reqs.forEach(req => {
+          let rrr = kb.any(req, kb.sym('http://www.w3.org/2007/ont/link#response'))
+          if (rrr) {
+            contentType = kb.anyValue(rrr, UI.ns.httph('content-type'))
+            allowed = kb.anyValue(rrr, UI.ns.httph('allow'))
+            eTag = kb.anyValue(rrr, UI.ns.httph('etag'))
+            if (!eTag) console.log('sourcePane: No eTag on GET')
+          }
+        })
         // contentType = response.headers['content-type'] // Not available ?!
         if (!contentType) {
           readonly = true
@@ -101590,12 +101602,7 @@ const thisPane = {
   }
 }
 
-if (nodeMode) {
-  module.exports = thisPane
-} else {
-  console.log('*** patching in live pane: ' + thisPane.name)
-  panes.register(thisPane)
-}
+module.exports = thisPane
 // ENDS
 
 
