@@ -75202,10 +75202,10 @@ var RDFParser = function RDFParser(store) {
           if (parsetype) {
             var nv = parsetype.nodeValue;
             if (nv === 'Literal') {
-              frame.datatype = RDFParser.ns.RDF + 'XMLLiteral'; // (this.buildFrame(frame)).addLiteral(dom)
-              // should work but doesn't
+              frame.datatype = RDFParser.ns.RDF + 'XMLLiteral';
               frame = this.buildFrame(frame);
-              frame.addLiteral(dom);
+              // Don't include the literal node, only its children
+              frame.addLiteral(dom.childNodes);
               dig = false;
             } else if (nv === 'Resource') {
               frame = this.buildFrame(frame, frame.element);
@@ -104432,12 +104432,13 @@ module.exports = UI;
 //  Parameters for the whole chat like its title are stred on
 //  index.ttl#this and the chats messages are stored in YYYY/MM/DD/chat.ttl
 //
+/* global alert */
 var UI = {
   authn: __webpack_require__(/*! ./signin */ "./node_modules/solid-ui/lib/signin.js"),
   icons: __webpack_require__(/*! ./iconBase */ "./node_modules/solid-ui/lib/iconBase.js"),
   log: __webpack_require__(/*! ./log */ "./node_modules/solid-ui/lib/log.js"),
   ns: __webpack_require__(/*! ./ns */ "./node_modules/solid-ui/lib/ns.js"),
-  pad: __webpack_require__(/*! ./ */ "./node_modules/solid-ui/lib/index.js"),
+  pad: __webpack_require__(/*! ./pad */ "./node_modules/solid-ui/lib/pad.js"),
   rdf: __webpack_require__(/*! rdflib */ "./node_modules/rdflib/lib/index.js"),
   store: __webpack_require__(/*! ./store */ "./node_modules/solid-ui/lib/store.js"),
   style: __webpack_require__(/*! ./style */ "./node_modules/solid-ui/lib/style.js"),
@@ -104455,6 +104456,8 @@ module.exports = function (dom, kb, subject, options) {
   options = options || {};
 
   var newestFirst = !!options.newestFirst;
+  var menuButton;
+  // var participation // An object tracking users use and prefs
 
   var messageBodyStyle = 'white-space: pre-wrap; width: 90%; font-size:100%; border: 0.07em solid #eee; padding: .2em 0.5em; margin: 0.1em 1em 0.1em 1em;';
   // 'font-size: 100%; margin: 0.1em 1em 0.1em 1em;  background-color: white; white-space: pre-wrap; padding: 0.1em;'
@@ -104515,9 +104518,10 @@ module.exports = function (dom, kb, subject, options) {
       });
     });
   }
+
   //       Form for a new message
   //
-  var newMessageForm = function newMessageForm() {
+  function newMessageForm() {
     var form = dom.createElement('tr');
     var lhs = dom.createElement('td');
     var middle = dom.createElement('td');
@@ -104526,25 +104530,26 @@ module.exports = function (dom, kb, subject, options) {
     form.appendChild(middle);
     form.appendChild(rhs);
     form.AJAR_date = '9999-01-01T00:00:00Z'; // ISO format for field sort
+    var field, sendButton;
 
-    var sendMessage = function sendMessage() {
-      // titlefield.setAttribute('class','pendingedit')
-      // titlefield.disabled = true
-
+    function sendMessage(text) {
       var now = addNewTableIfNeeded();
 
-      field.setAttribute('class', 'pendingedit');
-      field.disabled = true;
+      if (!text) {
+        field.setAttribute('style', messageBodyStyle + 'color: #bbb;'); // pendingedit
+        field.disabled = true;
+      }
       var sts = [];
       var timestamp = '' + now.getTime();
       var dateStamp = $rdf.term(now);
       var chatDocument = chatDocumentFromDate(now);
 
       var message = kb.sym(chatDocument.uri + '#' + 'Msg' + timestamp);
+      var content = kb.literal(text || field.value);
+      // if (text) field.value = text  No - don't destroy half-finsihed user input
 
       sts.push(new $rdf.Statement(subject, ns.wf('message'), message, chatDocument));
-      // sts.push(new $rdf.Statement(message, ns.dc('title'), kb.literal(titlefield.value), chatDocument))
-      sts.push(new $rdf.Statement(message, ns.sioc('content'), kb.literal(field.value), chatDocument));
+      sts.push(new $rdf.Statement(message, ns.sioc('content'), content, chatDocument));
       sts.push(new $rdf.Statement(message, DCT('created'), dateStamp, chatDocument));
       if (me) sts.push(new $rdf.Statement(message, ns.foaf('maker'), me, chatDocument));
 
@@ -104553,22 +104558,50 @@ module.exports = function (dom, kb, subject, options) {
           form.appendChild(UI.widgets.errorMessageBlock(dom, 'Error writing message: ' + body));
         } else {
           var bindings = { '?msg': message,
-            '?content': kb.literal(field.value),
+            '?content': content,
             '?date': dateStamp,
             '?creator': me };
           renderMessage(messageTable, bindings, false); // not green
 
-          field.value = ''; // clear from out for reuse
-          field.setAttribute('class', '');
-          field.disabled = false;
+          if (!text) {
+            field.value = ''; // clear from out for reuse
+            field.setAttribute('style', messageBodyStyle);
+            field.disabled = false;
+          }
         }
       };
       updater.update([], sts, sendComplete);
-    };
+    }
     form.appendChild(dom.createElement('br'));
 
-    var field, sendButton;
-    var turnOnInput = function turnOnInput() {
+    //    DRAG AND DROP
+    function droppedFileHandler(files) {
+      UI.widgets.uploadFiles(kb.fetcher, files, chatDocument.dir().uri + 'Files', chatDocument.dir().uri + 'Pictures', function (theFile, destURI) {
+        // @@@@@@ Wait for eachif several
+        sendMessage(destURI);
+      });
+    }
+
+    // When a set of URIs are dropped on the field
+    var droppedURIHandler = function droppedURIHandler(uris) {
+      sendMessage(uris[0]); // @@@@@ wait
+      /*
+      Promise.all(uris.map(function (u) {
+        return sendMessage(u) // can add to meetingDoc but must be sync
+      })).then(function (a) {
+        saveBackMeetingDoc()
+      })
+      */
+    };
+
+    // When we are actually logged on
+    function turnOnInput() {
+      if (options.menuHandler && menuButton) {
+        var menuOptions = { me: me, dom: dom, div: div, newBase: messageTable.chatDocument.dir().uri };
+        menuButton.addEventListener('click', function (event) {
+          options.menuHandler(event, subject, menuOptions);
+        }, false);
+      }
       creatorAndDate(lhs, me, '', null);
 
       field = dom.createElement('textarea');
@@ -104588,13 +104621,18 @@ module.exports = function (dom, kb, subject, options) {
           }
         }
       }, false);
+      UI.widgets.makeDropTarget(field, droppedURIHandler, droppedFileHandler);
 
       rhs.innerHTML = '';
       sendButton = UI.widgets.button(dom, UI.icons.iconBase + 'noun_383448.svg', 'Send');
       sendButton.setAttribute('style', UI.style.buttonStyle + 'float: right;');
-      sendButton.addEventListener('click', sendMessage, false);
+      sendButton.addEventListener('click', function (ev) {
+        return sendMessage();
+      }, false);
       rhs.appendChild(sendButton);
-    };
+
+      UI.pad.recordParticipation(subject, subject.doc()); // participation =
+    } // turn on inpuut
 
     var context = { div: middle, dom: dom };
     UI.authn.logIn(context).then(function (context) {
@@ -104603,7 +104641,7 @@ module.exports = function (dom, kb, subject, options) {
     });
 
     return form;
-  };
+  }
 
   function nick(person) {
     var s = UI.store.any(person, UI.ns.foaf('nick'));
@@ -104683,10 +104721,11 @@ module.exports = function (dom, kb, subject, options) {
     anchor.setAttribute('href', imageUri);
     anchor.setAttribute('target', 'images');
     anchor.appendChild(img);
+    UI.widgets.makeDraggable(img, $rdf.sym(imageUri));
     return anchor;
   }
 
-  var renderMessage = function renderMessage(messageTable, bindings, fresh) {
+  function renderMessage(messageTable, bindings, fresh) {
     var creator = bindings['?creator'];
     var message = bindings['?msg'];
     var date = bindings['?date'];
@@ -104759,7 +104798,7 @@ module.exports = function (dom, kb, subject, options) {
         deleteMessage(message);
       }, false);
     }, false);
-  };
+  }
 
   function insertPreviousMessages(event, messageTable) {
     var date = new Date(messageTable.date.getTime() - 86400000); // day in mssecs
@@ -104824,6 +104863,7 @@ module.exports = function (dom, kb, subject, options) {
       messageTable.extended = !messageTable.extended; // Toggle
     }
     var messageTable = dom.createElement('table');
+    // var messageButton
     messageTable.date = date;
     var chatDocument = chatDocumentFromDate(date);
     messageTable.chatDocument = chatDocument;
@@ -104838,6 +104878,7 @@ module.exports = function (dom, kb, subject, options) {
       } else {
         messageTable.appendChild(tr); // not newestFirst
       }
+      messageTable.inputRow = tr;
     }
 
     /// ///// Infinite scroll
@@ -104856,14 +104897,14 @@ module.exports = function (dom, kb, subject, options) {
 
       var dateCell = moreButtonTR.appendChild(dom.createElement('td'));
       dateCell.style = 'text-align: center; vertical-align: middle; color: #888; font-style: italic;';
-      dateCell.textContent = UI.widgets.shortDate(date.toISOString());
+      dateCell.textContent = UI.widgets.shortDate(date.toISOString(), true); // no time, only date
 
-      if (options.menuHandler) {
+      if (options.menuHandler && live) {
         // A high level handles calls for a menu
         var menuIcon = 'noun_897914.svg'; // or maybe dots noun_243787.svg
-        var menuButton = UI.widgets.button(dom, UI.icons.iconBase + menuIcon, 'Menu ...');
+        menuButton = UI.widgets.button(dom, UI.icons.iconBase + menuIcon, 'Menu ...'); // wider var
         // menuButton.setAttribute('style', UI.style.buttonStyle)
-        menuButton.addEventListener('click', options.menuHandler, false); // control side menu
+        // menuButton.addEventListener('click', event => { menuHandler(event, menuOptions)}, false) // control side menu
         var menuButtonCell = moreButtonTR.appendChild(dom.createElement('td'));
         menuButtonCell.appendChild(menuButton);
         menuButtonCell.style = 'width:3em; height:3em;';
@@ -104890,6 +104931,10 @@ module.exports = function (dom, kb, subject, options) {
     var newChatDocument = chatDocumentFromDate(now);
     if (!newChatDocument.sameTerm(chatDocument)) {
       // It is a new day
+      if (messageTable.inputRow) {
+        messageTable.removeChild(messageTable.inputRow);
+        delete messageTable.inputRow;
+      }
       var oldChatDocument = chatDocument;
       appendCurrentMessages();
       // Adding a link in the document will ping listeners to add the new block too
@@ -105728,6 +105773,8 @@ var UI = {
   store: __webpack_require__(/*! ./store */ "./node_modules/solid-ui/lib/store.js"),
   widgets: __webpack_require__(/*! ./widgets */ "./node_modules/solid-ui/lib/widgets/index.js")
 };
+var kb = UI.store;
+var ns = UI.ns;
 
 var utils = __webpack_require__(/*! ./utils */ "./node_modules/solid-ui/lib/utils.js");
 
@@ -105747,8 +105794,6 @@ UI.pad.lightColorHash = function (author) {
 //  This is more general tham the pad.
 //
 UI.pad.renderPartipants = function (dom, table, padDoc, subject, me, options) {
-  var kb = UI.store;
-  var ns = UI.ns;
   table.setAttribute('style', 'margin: 0.8em;');
 
   var newRowForParticpation = function newRowForParticpation(parp) {
@@ -105781,12 +105826,41 @@ UI.pad.renderPartipants = function (dom, table, padDoc, subject, me, options) {
   return table;
 };
 
+// Record or find an old Particpation objects
+UI.pad.participationObject = function (subject, padDoc, me) {
+  return new Promise(function (resolve, reject) {
+    if (!me) {
+      throw new Error('Not user id');
+    }
+
+    var parps = kb.each(subject, ns.wf('participation')).filter(function (pn) {
+      return kb.holds(pn, ns.wf('participant'), me);
+    });
+    if (parps.length > 1) {
+      throw new Error('Multiple records of your participation');
+    }
+    if (parps.length) {
+      // If I am not already recorded
+      resolve(parps[0]); // returns the particpation object
+    } else {
+      var participation = UI.widgets.newThing(padDoc);
+      var ins = [UI.rdf.st(subject, ns.wf('participation'), participation, padDoc), UI.rdf.st(participation, ns.wf('participant'), me, padDoc), UI.rdf.st(participation, ns.cal('dtstart'), new Date(), padDoc), UI.rdf.st(participation, ns.ui('backgroundColor'), UI.pad.lightColorHash(me), padDoc)];
+      kb.updater.update([], ins, function (uri, ok, errorMessage) {
+        if (!ok) {
+          reject(new Error('Error recording your partipation: ' + errorMessage));
+        } else {
+          resolve(participation);
+        }
+        // UI.pad.renderPartipants(dom, table, padDoc, subject, me, options)
+      });
+      resolve(participation);
+    }
+  });
+};
+
 // Record my participation and display participants
 //
 UI.pad.recordParticipation = function (subject, padDoc, refreshable) {
-  var kb = UI.store;
-  var ns = UI.ns;
-
   var me = UI.authn.currentUser();
   if (!me) return; // Not logged in
 
@@ -105796,8 +105870,10 @@ UI.pad.recordParticipation = function (subject, padDoc, refreshable) {
   if (parps.length > 1) {
     throw new Error('Multiple records of your participation');
   }
-  if (!parps.length) {
+  if (parps.length) {
     // If I am not already recorded
+    return parps[0]; // returns the particpation object
+  } else {
     var participation = UI.widgets.newThing(padDoc);
     var ins = [UI.rdf.st(subject, ns.wf('participation'), participation, padDoc), UI.rdf.st(participation, ns.wf('participant'), me, padDoc), UI.rdf.st(participation, UI.ns.cal('dtstart'), new Date(), padDoc), UI.rdf.st(participation, ns.ui('backgroundColor'), UI.pad.lightColorHash(me), padDoc)];
     kb.updater.update([], ins, function (uri, ok, errorMessage) {
@@ -105809,6 +105885,7 @@ UI.pad.recordParticipation = function (subject, padDoc, refreshable) {
       }
       // UI.pad.renderPartipants(dom, table, padDoc, subject, me, options)
     });
+    return participation;
   }
 };
 
@@ -106445,12 +106522,18 @@ UI.pad.notepad = function (dom, padDoc, subject, me, options) {
 //                  Solid-UI temporary preferences
 //                  ==============================
 //
+var kb = __webpack_require__(/*! ./store */ "./node_modules/solid-ui/lib/store.js");
+var ns = __webpack_require__(/*! ./ns */ "./node_modules/solid-ui/lib/ns.js");
+var authn = __webpack_require__(/*! ./signin */ "./node_modules/solid-ui/lib/signin.js");
+var widgets = __webpack_require__(/*! ./widgets */ "./node_modules/solid-ui/lib/widgets/index.js");
+var pad = __webpack_require__(/*! ./pad */ "./node_modules/solid-ui/lib/pad.js");
 
 // This was tabulator . preferences in the tabulator
 //
 module.exports = { // used for storing user name
   value: [],
   get: function get(k) {
+    // original
     return this.value[k];
   },
   set: function set(k, v) {
@@ -106459,10 +106542,138 @@ module.exports = { // used for storing user name
       throw new Error('Non-string value of preference ' + k + ': ' + v);
     }
     this.value[k] = v;
-  }
-  // ends
+  },
+  renderPreferencesForm: renderPreferencesForm,
+  recordSharedPreferences: recordSharedPreferences,
+  getPreferencesForClass: getPreferencesForClass
+  // In a solid world, Preferences are stored in the web
+  //
+  // Make an RDF node for recording the common view preferences for any object
+  // (maybe make it in a separate file?)
+};function recordSharedPreferences(subject, context) {
+  return new Promise(function (resolve, reject) {
+    var sharedPreferences = kb.any(subject, ns.ui.sharedPreferences);
+    if (!sharedPreferences) {
+      var sp = $rdf.sym(subject.doc().uri + 'SharedPreferences');
+      var ins = [$rdf.st(subject, ns.ui.sharedPreferences, sp, subject.doc())];
+      console.log('Creating shared preferences ' + sp);
+      kb.updater.update([], ins, function (uri, ok, errorMessage) {
+        if (!ok) {
+          reject(new Error('create shard prefs: ' + errorMessage));
+        } else {
+          context.sharedPreferences = sp;
+          resolve(context);
+        }
+      });
+    } else {
+      context.sharedPreferences = sharedPreferences;
+      resolve(context);
+    }
+  });
+}
 
-};
+// Construct a personal defaults node in the preferences file for a given class of object
+//
+function recordPersonalDefaults(klass, context) {
+  return new Promise(function (resolve, reject) {
+    authn.logInLoadPreferences(context).then(function (context) {
+      var regs = kb.each(null, ns.solid('forClass'), klass);
+      var ins = [];
+      var prefs;
+      var reg;
+      if (regs.length) {
+        // Use existing node is we can
+        regs.forEach(function (r) {
+          prefs = prefs || kb.any(r, ns.solid('personalDefaults'));
+        });
+        if (prefs) {
+          context.personalDefaults = prefs; // Found one
+          resolve(context);
+        } else {
+          prefs = widgets.newThing(context.preferencesFile);
+          reg = regs[0];
+        }
+      } else {
+        // no regs fo class
+        reg = widgets.newThing(context.preferencesFile);
+        ins = [$rdf.st(reg, ns.rdf('type'), ns.solid('Regsitration'), context.preferencesFile), $rdf.st(reg, ns.solid('forClass'), klass, context.preferencesFile)];
+      }
+      prefs = widgets.newThing(context.preferencesFile);
+      ins.push($rdf.st(reg, ns.solid('personalDefaults'), prefs, context.preferencesFile));
+      kb.updater.update([], ins, function (uri, ok, errm) {
+        if (!ok) {
+          reject(new Error('Setting preferences for ' + klass + ': ' + errm));
+        } else {
+          context.personalDefaults = prefs;
+          resolve(context);
+        }
+      });
+    }, function (err) {
+      reject(err);
+    });
+  });
+}
+
+function renderPreferencesForm(subject, klass, preferencesForm, context) {
+  var prefContainer = context.dom.createElement('div');
+  pad.participationObject(subject, subject.doc(), context.me).then(function (participation) {
+    var dom = context.dom;
+    function heading(text) {
+      prefContainer.appendChild(dom.createElement('h5')).textContent = text;
+    }
+    heading('My view of this ' + context.noun);
+    widgets.appendForm(dom, prefContainer, {}, participation, preferencesForm, subject.doc(), function (ok, mes) {
+      if (!ok) widgets.complain(context, mes);
+    });
+
+    heading('Everyone\'s  view of this ' + context.noun);
+    var sharedPreferences = kb.any(subject, ns.ui.sharedPreferences);
+    recordSharedPreferences(subject, context).then(function (context) {
+      widgets.appendForm(dom, prefContainer, {}, sharedPreferences, preferencesForm, subject.doc(), function (ok, mes) {
+        if (!ok) widgets.complain(context, mes);
+      });
+
+      heading('My default view of any ' + context.noun);
+      recordPersonalDefaults(klass, context).then(function (context) {
+        widgets.appendForm(dom, prefContainer, {}, context.personalDefaults, preferencesForm, context.preferencesFile, function (ok, mes) {
+          if (!ok) widgets.complain(context, mes);
+        });
+      }, function (err) {
+        widgets.complain(context, err);
+      });
+    });
+  }, function (err) {
+    // parp object fails
+    prefContainer.appendChild(widgets.errorMessageBlock(context.dom, err));
+  });
+  return prefContainer;
+}
+
+// This is the function which acuakly reads and combines the preferences
+//
+//  @@ make it much more tolerant of missing buts of prefernces
+function getPreferencesForClass(subject, klass, predicates, context) {
+  return new Promise(function (resolve, reject) {
+    pad.participationObject(subject, subject.doc(), context.me).then(function (participation) {
+      recordSharedPreferences(subject, context).then(function (context) {
+        recordPersonalDefaults(klass, context).then(function (context) {
+          var results = [];
+          var personalDefaults = context.personalDefaults;
+          predicates.forEach(function (pred) {
+            // Order of preference: My settings on object, Global settings on object, my settings on class
+            var v1 = kb.any(participation, pred) || kb.any(subject, pred) || kb.any(personalDefaults, pred);
+            if (v1) {
+              results[pred.uri] = v1.value;
+            }
+          });
+          resolve(results);
+        }, reject);
+      });
+    }, reject);
+  });
+}
+
+// ends
 
 /***/ }),
 
@@ -110317,9 +110528,15 @@ function predParentOf(node) {
 "use strict";
 
 
+/* Drag and drop common functionality
+*/
+var mime = __webpack_require__(/*! mime-types */ "./node_modules/mime-types/index.js");
+
+/* global FileReader */
 module.exports = {
   makeDropTarget: makeDropTarget,
-  makeDraggable: makeDraggable
+  makeDraggable: makeDraggable,
+  uploadFiles: uploadFiles
 };
 
 function makeDropTarget(ele, droppedURIHandler, droppedFileHandler) {
@@ -110420,6 +110637,49 @@ function makeDraggable(tr, obj) {
   }, false);
 }
 
+/* uploadFiles
+**
+**  Generic uploader of local files to the web
+**   typically called from dropped file handler
+** Params
+**  fetcher   instance of class Fetcher as in kb.fetcher
+**  files      Array of file objects
+**  fileBase   URI of folder in which to put files (except images) (no trailing slash)
+**  imageBase  URI of folder in which to put images
+**  successHandler(file, uploadedURI)    Called after each success upload
+**                              With file object an final URI as params
+*/
+function uploadFiles(fetcher, files, fileBase, imageBase, successHandler) {
+  for (var i = 0; files[i]; i++) {
+    var f = files[i];
+    console.log(' dropped: Filename: ' + f.name + ', type: ' + (f.type || 'n/a') + ' size: ' + f.size + ' bytes, last modified: ' + (f.lastModifiedDate ? f.lastModifiedDate.toLocaleDateString() : 'n/a')); // See e.g. https://www.html5rocks.com/en/tutorials/file/dndfiles/
+
+    // @@ Add: progress bar(s)
+    var reader = new FileReader();
+    reader.onload = function (theFile) {
+      return function (e) {
+        var data = e.target.result;
+        console.log(' File read byteLength : ' + data.byteLength);
+        var folderName = theFile.type.startsWith('image/') ? imageBase || fileBase : fileBase;
+        var destURI = folderName + '/' + encodeURIComponent(theFile.name);
+        var extension = mime.extension(theFile.type);
+        if (theFile.type !== mime.lookup(theFile.name)) {
+          destURI += '_.' + extension;
+          console.log('MIME TYPE MISMATCH -- adding extension: ' + destURI);
+        }
+
+        fetcher.webOperation('PUT', destURI, { data: data, contentType: theFile.type }).then(function (response) {
+          console.log(' Upload: put OK: ' + destURI);
+          successHandler(theFile, destURI);
+        }, function (error) {
+          console.log(' Upload: FAIL ' + destURI + ', Error: ' + error);
+        });
+      };
+    }(f);
+    reader.readAsArrayBuffer(f);
+  }
+}
+
 /***/ }),
 
 /***/ "./node_modules/solid-ui/lib/widgets/error.js":
@@ -110473,8 +110733,10 @@ function errorMessageBlock(dom, msg, backgroundColor) {
 //
 // (In order to avoid name collisions, it is safely assumed that modules don't
 // export widgets with the same name)
+/* global document alert */
 var widgets = module.exports = Object.assign({}, __webpack_require__(/*! ./peoplePicker */ "./node_modules/solid-ui/lib/widgets/peoplePicker.js"), // UI.widgets.PeoplePicker
-__webpack_require__(/*! ./dragAndDrop */ "./node_modules/solid-ui/lib/widgets/dragAndDrop.js"), __webpack_require__(/*! ./error */ "./node_modules/solid-ui/lib/widgets/error.js"), // UI.widgets.errorMessageBlock
+__webpack_require__(/*! ./dragAndDrop */ "./node_modules/solid-ui/lib/widgets/dragAndDrop.js"), // uploadFiles etc
+__webpack_require__(/*! ./error */ "./node_modules/solid-ui/lib/widgets/error.js"), // UI.widgets.errorMessageBlock
 {
   buildCheckboxForm: buildCheckboxForm,
   complain: complain
@@ -110499,7 +110761,10 @@ function getStatusArea(context) {
   var box = context.statusArea || context.div || null;
   if (box) return box;
   var dom = context.dom;
-  if (context.dom) {
+  if (!dom && typeof document !== 'undefined') {
+    dom = document;
+  }
+  if (dom) {
     var body = dom.getElementsByTagName('body')[0];
     box = dom.createEvent('div');
     body.insertBefore(box, body.firstElementChild);
@@ -110510,9 +110775,10 @@ function getStatusArea(context) {
 }
 
 function complain(context, err) {
+  if (!err) return; // only if error
   var ele = context.statusArea || context.div || getStatusArea(context);
   console.log('Complaint: ' + err);
-  if (ele) ele.appendChild(error.errorMessageBlock(context.dom, err));
+  if (ele) ele.appendChild(error.errorMessageBlock(context.dom, err));else alert(err);
 }
 
 // var UI.ns = require('./ns.js')
@@ -110547,15 +110813,15 @@ UI.widgets.extractLogURI = function (fullURI) {
 };
 
 // @@@ This needs to be changed to local timee
-UI.widgets.shortDate = function (str) {
-  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date
+//  noTime  - only give date, no time,
+UI.widgets.shortDate = function (str, noTime) {
   if (!str) return '???';
   var month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   try {
-    var now = new Date();
-    var nowZ = $rdf.term(now).value;
+    var nowZ = new Date().toISOString();
+    // var nowZ = $rdf.term(now).value
     // var n = now.getTimezoneOffset() // Minutes
-    if (str.slice(0, 10) === nowZ.slice(0, 10)) return str.slice(11, 16);
+    if (str.slice(0, 10) === nowZ.slice(0, 10) && !noTime) return str.slice(11, 16);
     if (str.slice(0, 4) === nowZ.slice(0, 4)) {
       return month[parseInt(str.slice(5, 7), 10) - 1] + ' ' + parseInt(str.slice(8, 10), 10);
     }
