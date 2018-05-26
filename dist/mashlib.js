@@ -86583,10 +86583,13 @@ module.exports = {
 **
 **  A long chat consists a of a series of chat files saved by date.
 */
+/* global alert */
 
 const UI = __webpack_require__(/*! solid-ui */ "./node_modules/solid-ui/lib/index.js")
 const ns = UI.ns
 const kb = UI.store
+// const panes = require('../paneRegistry')
+const mainClass = ns.meeting('LongChat') // @@ something from SIOC?
 
 module.exports = { // noun_704.svg Canoe   noun_346319.svg = 1 Chat  noun_1689339.svg = three chat
   icon: UI.icons.iconBase + 'noun_1689339.svg',
@@ -86600,7 +86603,7 @@ module.exports = { // noun_704.svg Canoe   noun_346319.svg = 1 Chat  noun_168933
     return null // Suppress pane otherwise
   },
 
-  mintClass: ns.meeting('LongChat'),
+  mintClass: mainClass,
 
   mintNew: function (newPaneOptions) {
     var updater = kb.updater
@@ -86633,31 +86636,95 @@ module.exports = { // noun_704.svg Canoe   noun_346319.svg = 1 Chat  noun_168933
   },
 
   render: function (subject, dom) {
-    var complain = function complain (message, color) {
-      var pre = dom.createElement('pre')
-      pre.setAttribute('style', 'background-color: ' + color || '#eed' + ';')
-      div.appendChild(pre)
-      pre.appendChild(dom.createTextNode(message))
+    /* Preferences
+    **
+    **  Things like whether to color text by author webid, to expand image URLs inline,
+    ** expanded inline image height. ...
+    ** In general, preferences can be set per user, per user/app combo, per instance,
+    ** and per instance/user combo. Per instance? not sure about unless it is valuable
+    ** for everyone to be seeing the same thing.
+    */
+    const preferencesFormText = `
+  @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+  @prefix solid: <http://www.w3.org/ns/solid/terms#>.
+  @prefix ui: <http://www.w3.org/ns/ui#>.
+  @prefix : <#>.
+
+  :this
+    <http://purl.org/dc/elements/1.1/title> "Chat preferences" ;
+    a ui:Form ;
+    ui:part :colorizeByAuthor, :expandImagesInline, :newestFirst, :inlineImageHeightEms;
+    ui:parts ( :colorizeByAuthor :expandImagesInline :newestFirst :inlineImageHeightEms ).
+
+:colorizeByAuthor a ui:BooleanField; ui:property solid:colorizeByAuthor;
+  ui:label "Color user input by user".
+:expandImagesInline a ui:BooleanField; ui:property solid:expandImagesInline;
+  ui:label "Expand image URLs inline".
+:newestFirst a ui:BooleanField; ui:property solid:newestFirst;
+  ui:label "Newest messages at the top".
+
+:inlineImageHeightEms a ui:IntegerField; ui:property solid:inlineImageHeightEms;
+  ui:label "Inline image height (lines)".
+
+`
+    const preferencesForm = kb.sym('https://solid.github.io/solid-panes/longCharPane/preferencesForm.ttl#this')
+    const preferencesFormDoc = preferencesForm.doc()
+    if (!kb.holds(undefined, undefined, undefined, preferencesFormDoc)) { // If not loaded already
+      $rdf.parse(preferencesFormText, kb, preferencesFormDoc.uri, 'text/turtle') // Load form directly
     }
+    let preferenceProperties = kb.statementsMatching(null, ns.ui.property, null, preferencesFormDoc).map(st => st.object)
+
+    //          Menu
+    //
+    // Build a menu a the side (@@ reactive: on top?)
+    function menuHandler (event, subject, menuOptions) {
+      let div = menuOptions.div
+      let dom = menuOptions.dom
+      // let me = menuOptions.me
+
+      div.menuExpaded = !div.menuExpaded
+      if (div.menuExpaded) { // Expand
+        let menuArea = div.appendChild(dom.createElement('div'))
+        // @@ style below fix .. just make it onviious while testing
+        menuArea.style = 'border-radius: 1em; border: 0.1em solid purple; padding: 1em;'
+        let menuTable = menuArea.appendChild(dom.createElement('table'))
+
+        let participantsArea = menuTable.appendChild(dom.createElement('tr'))
+        let registrationArea = menuTable.appendChild(dom.createElement('tr'))
+        let preferencesArea = menuTable.appendChild(dom.createElement('tr'))
+        // let commandsArea = menuTable.appendChild(dom.createElement('tr'))
+        let statusArea = menuTable.appendChild(dom.createElement('tr'))
+
+        UI.pad.manageParticipation(dom, participantsArea, subject.doc(), subject, menuOptions.me, {})
+
+        var context = {noun: 'chat room', me: menuOptions.me, statusArea: statusArea, div: registrationArea, dom: dom}
+        UI.authn.registrationControl(context, subject, mainClass).then(function (context) {
+          console.log('Registration control finsished.')
+        })
+
+        var context2 = {noun: 'chat room', me: menuOptions.me, statusArea: statusArea, div: preferencesArea, dom, kb}
+        if (!menuOptions.me) alert('menu: no me!')
+        preferencesArea.appendChild(UI.preferences.renderPreferencesForm(subject, mainClass, preferencesForm, context2))
+
+        div.menuArea = menuArea
+      } else { // Close menu  (hide or delete??)
+        div.removeChild(div.menuArea)
+      }
+    } // menuHandler
 
     var div = dom.createElement('div')
     div.setAttribute('class', 'chatPane')
-    let options = {infinite: true} // Like newestFirst
+    let options = {infinite: true, menuHandler: menuHandler} // Like newestFirst
+    let context = {noun: 'chat room', div, dom}
+    context.me = UI.authn.currentUser() // If already logged on
 
-    var messageStore
-    if (kb.holds(subject, ns.rdf('type'), ns.meeting('LongChat'))) { // subject may be the file
-      messageStore = subject.doc()
-    } else {
-      complain('Unknown chat type')
-    }
+    UI.preferences.getPreferencesForClass(subject, mainClass, preferenceProperties, context).then(prefMap => {
+      for (let propuri in prefMap) {
+        options[propuri.split('#')[1]] = prefMap[propuri]
+      }
+      div.appendChild(UI.infiniteMessageArea(dom, kb, subject, options))
+    }, err => UI.widgets.complain(err))
 
-    div.appendChild(UI.infiniteMessageArea(dom, kb, subject, options))
-    /*
-    kb.updater.addDownstreamChangeListener(messageStore, function () {
-      UI.widgets.refreshTree(div)
-    }) // Live update
-    */
-//    })
 
     return div
   }
@@ -87882,7 +87949,7 @@ module.exports = {
       UI.store.fetcher.load(toBeFetched)
 
         .catch(function (e) {
-          console.log('Error: Failed to load form or ontology: ' + e)
+          console.log('Error: Failed to load subject: ' + e)
         }) // load.then
 
         .then(function (xhrs) {
@@ -88081,7 +88148,7 @@ module.exports = {
     me = UI.authn.currentUser()
     if (!me) {
       console.log('(You do not have your Web Id set. Sign in or sign up to make changes.)')
-      UI.authn.logInLoadProfile(context).then( context => {
+      UI.authn.logInLoadProfile(context).then(context => {
         console.log('Logged in as ' + context.me)
         me = context.me
       }, err => {
@@ -92274,15 +92341,12 @@ f:settings a :Form;
 **
 **  Putting together some of the tools we have to manage a Meeting
 */
-/* global FileReader */
 
 // const VideoRoomPrefix = 'https://appear.in/'
 const VideoRoomPrefix = 'https://meet.jit.si/rdflib-rdfext '
 
 var UI = __webpack_require__(/*! solid-ui */ "./node_modules/solid-ui/lib/index.js")
 var panes = __webpack_require__(/*! ../paneRegistry */ "./node_modules/solid-panes/paneRegistry.js")
-
-var mime = __webpack_require__(/*! mime-types */ "./node_modules/mime-types/index.js")
 
 var meetingDetailsFormText = __webpack_require__(/*! ./meetingDetailsForm.js */ "./node_modules/solid-panes/meeting/meetingDetailsForm.js")
 
@@ -92578,8 +92642,8 @@ module.exports = {
         saveBackMeetingDoc()
       })
     }
-
-    var droppedFileHandler = function (files) {
+/*
+    var droppedFileHandler0 = function (files) {
       for (var i = 0; files[i]; i++) {
         let f = files[i]
         console.log(' meeting: Filename: ' + f.name + ', type: ' + (f.type || 'n/a') +
@@ -92587,7 +92651,6 @@ module.exports = {
           (f.lastModifiedDate ? f.lastModifiedDate.toLocaleDateString() : 'n/a')
         ) // See e.g. https://www.html5rocks.com/en/tutorials/file/dndfiles/
 
-        // @@ Add: progress bar(s)
         var reader = new FileReader()
         reader.onload = (function (theFile) {
           return function (e) {
@@ -92602,12 +92665,12 @@ module.exports = {
             }
 
             UI.store.fetcher.webOperation('PUT', destURI, { data: data, contentType: theFile.type })
-              .then(function () {
+              .then(function (theFile, destURI) {
                 console.log(' Upload: put OK: ' + destURI)
                 if (theFile.type.startsWith('image/')) {
-                  makePicturesFolder(folderName) // If necessary
+                  makePicturesFolder('Pictures') // If necessary
                 } else {
-                  makeMaterialsFolder(folderName)
+                  makeMaterialsFolder('Files')
                 }
               })
               .catch(function (error) {
@@ -92618,6 +92681,57 @@ module.exports = {
         reader.readAsArrayBuffer(f)
       }
     }
+*/
+    var droppedFileHandler = function (files) {
+      UI.widgets.uploadFiles(kb.fetcher, files, meeting.dir().uri + 'Files', meeting.dir().uri + 'Pictures',
+        function (theFile, destURI) {
+          if (theFile.type.startsWith('image/')) {
+            makePicturesFolder('Files') // If necessary
+          } else {
+            makeMaterialsFolder('Pictures')
+          }
+        })
+    }
+
+    // Generic one  -- call from dropped file handler
+    // @@ Move to solid-ui drag and drop widgets
+    /*
+    var uploadFiles = function (fetcher, files, fileBase, imageBase, successHandler) {
+      for (var i = 0; files[i]; i++) {
+        let f = files[i]
+        console.log(' dropped: Filename: ' + f.name + ', type: ' + (f.type || 'n/a') +
+          ' size: ' + f.size + ' bytes, last modified: ' +
+          (f.lastModifiedDate ? f.lastModifiedDate.toLocaleDateString() : 'n/a')
+        ) // See e.g. https://www.html5rocks.com/en/tutorials/file/dndfiles/
+
+        // @@ Add: progress bar(s)
+        var reader = new FileReader()
+        reader.onload = (function (theFile) {
+          return function (e) {
+            var data = e.target.result
+            console.log(' File read byteLength : ' + data.byteLength)
+            var folderName = theFile.type.startsWith('image/') ? imageBase || fileBase : fileBase
+            var destURI = folderName + '/' + encodeURIComponent(theFile.name)
+            var extension = mime.extension(theFile.type)
+            if (theFile.type !== mime.lookup(theFile.name)) {
+              destURI += '_.' + extension
+              console.log('MIME TYPE MISMATCH -- adding extension: ' + destURI)
+            }
+
+            UI.store.fetcher.webOperation('PUT', destURI, { data: data, contentType: theFile.type })
+              .then(response => {
+                console.log(' Upload: put OK: ' + destURI)
+                successHandler(theFile, destURI)
+              },
+                error => {
+                  console.log(' Upload: FAIL ' + destURI + ', Error: ' + error)
+                })
+          }
+        })(f)
+        reader.readAsArrayBuffer(f)
+      }
+    }
+    */
 
     // //////////////////////////////////////////////////////  end of drag drop
 
@@ -93109,7 +93223,7 @@ module.exports = {
         iframe.setAttribute('src', target.uri)
         // iframe.setAttribute('style', 'height: 350px; border: 0; margin: 0; padding: 0; resize:both; width: 100%;')
         iframe.setAttribute('style', 'border: none; margin: 0; padding: 0; height: 100%; width: 100%; resize: both; overflow:scroll;')
-        containerDiv.style.resize = "none" // Remove scroll bars on outer div - don't seem to work so well
+        containerDiv.style.resize = 'none' // Remove scroll bars on outer div - don't seem to work so well
         containerDiv.style.padding = 0
       }
       var renderPeoplePicker = function () {
