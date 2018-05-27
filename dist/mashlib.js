@@ -104569,7 +104569,8 @@ module.exports = function (dom, kb, subject, options) {
 
   options = options || {};
 
-  var newestFirst = !!options.newestFirst;
+  var newestFirst = options.newestFirst === "1" || options.newestFirst === true; // hack for now
+  var colorizeByAuthor = options.colorizeByAuthor === "1" || options.colorizeByAuthor === true;
   var menuButton;
   // var participation // An object tracking users use and prefs
 
@@ -104826,9 +104827,11 @@ module.exports = function (dom, kb, subject, options) {
     renderMessage(messageTable, bindings, messageTable.fresh); // fresh from elsewhere
   };
 
-  function elementForImageURI(imageUri) {
+  function elementForImageURI(imageUri, options) {
     var img = dom.createElement('img');
-    img.setAttribute('style', 'max-height: 10em; border-radius: 1em; margin: 0.7em;');
+    var height = '10';
+    if (options.inlineImageHeightEms) height = ('' + options.inlineImageHeightEms).trim();
+    img.setAttribute('style', 'max-height: ' + height + 'em; border-radius: 1em; margin: 0.7em;');
     // UI.widgets.makeDropTarget(img, handleURIsDroppedOnMugshot, droppedFileHandler)
     if (imageUri) img.setAttribute('src', imageUri);
     var anchor = dom.createElement('a');
@@ -104874,13 +104877,14 @@ module.exports = function (dom, kb, subject, options) {
     var text = content.value;
     tr.appendChild(td2);
     var isImage = /\.(gif|jpg|jpeg|tiff|png|svg)$/i.test(text); // @@ Should use content-type not URI
-    if (isImage) {
-      var img = elementForImageURI(text);
+    if (isImage && options.expandImagesInline) {
+      var img = elementForImageURI(text, options);
       td2.appendChild(img);
     } else {
       // text
       var pre = dom.createElement('p');
-      pre.setAttribute('style', messageBodyStyle + (fresh ? 'background-color: #e8ffe8;' : 'background-color: #white;'));
+      var bgcolor = colorizeByAuthor ? UI.pad.lightColorHash(creator) : fresh ? '#e8ffe8' : 'white';
+      pre.setAttribute('style', messageBodyStyle + 'background-color: ' + bgcolor + ';');
       td2.appendChild(pre);
       pre.textContent = text;
     }
@@ -106666,10 +106670,10 @@ module.exports = { // used for storing user name
   // (maybe make it in a separate file?)
 };function recordSharedPreferences(subject, context) {
   return new Promise(function (resolve, reject) {
-    var sharedPreferences = kb.any(subject, ns.ui.sharedPreferences);
+    var sharedPreferences = kb.any(subject, ns.ui('sharedPreferences'));
     if (!sharedPreferences) {
-      var sp = $rdf.sym(subject.doc().uri + 'SharedPreferences');
-      var ins = [$rdf.st(subject, ns.ui.sharedPreferences, sp, subject.doc())];
+      var sp = $rdf.sym(subject.doc().uri + '#SharedPreferences');
+      var ins = [$rdf.st(subject, ns.ui('sharedPreferences'), sp, subject.doc())];
       console.log('Creating shared preferences ' + sp);
       kb.updater.update([], ins, function (uri, ok, errorMessage) {
         if (!ok) {
@@ -106741,8 +106745,8 @@ function renderPreferencesForm(subject, klass, preferencesForm, context) {
     });
 
     heading('Everyone\'s  view of this ' + context.noun);
-    var sharedPreferences = kb.any(subject, ns.ui.sharedPreferences);
     recordSharedPreferences(subject, context).then(function (context) {
+      var sharedPreferences = context.sharedPreferences;
       widgets.appendForm(dom, prefContainer, {}, sharedPreferences, preferencesForm, subject.doc(), function (ok, mes) {
         if (!ok) widgets.complain(context, mes);
       });
@@ -106763,27 +106767,55 @@ function renderPreferencesForm(subject, klass, preferencesForm, context) {
   return prefContainer;
 }
 
+// This should be part of rdflib.js ad part of the RDFJS Standard!!
+
+function toJS(term) {
+  if (!term.datatype) return term; // Objects remain objects
+  if (term.datatype.equals(ns.xsd('boolean'))) {
+    return term.value === '1';
+  }
+  if (term.datatype.equals(ns.xsd('dateTime')) || term.datatype.equals(ns.xsd('date'))) {
+    return new Date(term.value);
+  }
+  if (term.datatype.equals(ns.xsd('integer')) || term.datatype.equals(ns.xsd('float')) || term.datatype.equals(ns.xsd('decimal'))) {
+    return Number(term.value);
+  }
+  return term.value;
+}
+
 // This is the function which acuakly reads and combines the preferences
 //
 //  @@ make it much more tolerant of missing buts of prefernces
 function getPreferencesForClass(subject, klass, predicates, context) {
   return new Promise(function (resolve, reject) {
-    pad.participationObject(subject, subject.doc(), context.me).then(function (participation) {
-      recordSharedPreferences(subject, context).then(function (context) {
-        recordPersonalDefaults(klass, context).then(function (context) {
-          var results = [];
-          var personalDefaults = context.personalDefaults;
-          predicates.forEach(function (pred) {
-            // Order of preference: My settings on object, Global settings on object, my settings on class
-            var v1 = kb.any(participation, pred) || kb.any(subject, pred) || kb.any(personalDefaults, pred);
-            if (v1) {
-              results[pred.uri] = v1.value;
-            }
-          });
-          resolve(results);
+    recordSharedPreferences(subject, context).then(function (context) {
+      if (context.me) {
+        pad.participationObject(subject, subject.doc(), context.me).then(function (participation) {
+          recordPersonalDefaults(klass, context).then(function (context) {
+            var results = [];
+            var personalDefaults = context.personalDefaults;
+            predicates.forEach(function (pred) {
+              // Order of preference: My settings on object, Global settings on object, my settings on class
+              var v1 = kb.any(participation, pred) || kb.any(subject, pred) || kb.any(personalDefaults, pred);
+              if (v1) {
+                results[pred.uri] = toJS(v1);
+              }
+            });
+            resolve(results);
+          }, reject);
         }, reject);
-      });
-    }, reject);
+      } else {
+        // no user defined, just use common prefs
+        var results = [];
+        predicates.forEach(function (pred) {
+          var v1 = kb.any(subject, pred);
+          if (v1) {
+            results[pred.uri] = toJS(v1);
+          }
+        });
+        resolve(results);
+      }
+    });
   });
 }
 
