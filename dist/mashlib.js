@@ -68438,7 +68438,8 @@ var Fetcher = function () {
 
       uri = uri.uri || uri; // Accept object or string
       var doc = new NamedNode(uri).doc(); // strip off #
-      options.data = serialize(doc, this.store, doc.uri, options.contentType || 'text/turtle');
+      options.contentType = options.contentType || 'text/turtle';
+      options.data = serialize(doc, this.store, doc.uri, options.contentType);
       return this.webOperation('PUT', uri, options);
     }
   }, {
@@ -68554,7 +68555,9 @@ var Fetcher = function () {
             if (response.statusText) msg += ' (' + response.statusText + ')';
             msg += ' on ' + method + ' of <' + uri + '>';
             if (response.responseText) msg += ': ' + response.responseText;
-            reject(new Error(msg));
+            var e2 = new Error(msg);
+            e2.response = response;
+            reject(e2);
           }
         }, function (err) {
           var msg = 'Fetch error for ' + method + ' of <' + uri + '>:' + err;
@@ -68667,7 +68670,7 @@ var Fetcher = function () {
 
       var responseNode = kb.bnode();
 
-      kb.add(options.req, ns.link('response'), responseNode);
+      kb.add(options.req, ns.link('response'), responseNode, responseNode);
       kb.add(responseNode, ns.http('status'), kb.literal(response.status), responseNode);
       kb.add(responseNode, ns.http('statusText'), kb.literal(response.statusText), responseNode);
 
@@ -69032,7 +69035,6 @@ var Fetcher = function () {
       }
 
       var contentType = headers.get('content-type');
-
       if (!contentType || contentType.includes('application/octet-stream')) {
         var guess = this.guessContentType(options.resource.uri);
 
@@ -70032,6 +70034,8 @@ var Node = __webpack_require__(/*! ./node */ "./node_modules/rdflib/lib/node.js"
 var Variable = __webpack_require__(/*! ./variable */ "./node_modules/rdflib/lib/variable.js");
 
 var owl_ns = 'http://www.w3.org/2002/07/owl#';
+
+var defaultGraphURI = 'chrome:theSession';
 // var link_ns = 'http://www.w3.org/2007/ont/link#'
 
 // Handle Functional Property
@@ -70263,7 +70267,7 @@ var IndexedFormula = function (_Formula) {
       var st;
       if (!why) {
         // system generated
-        why = this.fetcher ? this.fetcher.appNode : this.sym('chrome:theSession');
+        why = this.fetcher ? this.fetcher.appNode : this.sym(defaultGraphURI);
       }
       subj = Node.fromValue(subj);
       pred = Node.fromValue(pred);
@@ -70891,6 +70895,11 @@ var IndexedFormula = function (_Formula) {
     key: 'length',
     get: function get() {
       return this.statements.length;
+    }
+  }], [{
+    key: 'defaultGraphURI',
+    get: function get() {
+      return defaultGraphURI;
     }
   }]);
 
@@ -72985,6 +72994,23 @@ Node.fromValue = function fromValue(value) {
   return Literal.fromValue(value);
 };
 
+Node.toJS = function fromJS(term) {
+  if (term.elements) {
+    return term.elements.map(Node.toJS); // Array node (not standard RDFJS)
+  }
+  if (!term.datatype) return term; // Objects remain objects
+  if (term.datatype.equals(ns.xsd('boolean'))) {
+    return term.value === '1';
+  }
+  if (term.datatype.equals(ns.xsd('dateTime')) || term.datatype.equals(ns.xsd('date'))) {
+    return new Date(term.value);
+  }
+  if (term.datatype.equals(ns.xsd('integer')) || term.datatype.equals(ns.xsd('float')) || term.datatype.equals(ns.xsd('decimal'))) {
+    return Number(term.value);
+  }
+  return term.value;
+};
+
 /***/ }),
 
 /***/ "./node_modules/rdflib/lib/parse.js":
@@ -73375,6 +73401,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 var log = __webpack_require__(/*! ./log */ "./node_modules/rdflib/lib/log.js");
 var docpart = __webpack_require__(/*! ./uri */ "./node_modules/rdflib/lib/uri.js").docpart;
 
+var defaultDocumentURI = _indexedFormula2.default.defaultGraphURI;
 /**
  * Query class, for tracking queries the user has in the UI.
  */
@@ -73462,7 +73489,8 @@ function indexedFormulaQuery(myQuery, callback, fetcher, onDone) {
       if (formula.redirections[other]) {
         other = formula.redirections[other];
       }
-      if (actual.sameTerm(other)) {
+      if (actual.sameTerm(other) || actual.uri && actual.uri === defaultDocumentURI) {
+        // Used to mean 'any graph' in a query
         return [[[], null]];
       }
       return [];
@@ -73651,21 +73679,24 @@ function indexedFormulaQuery(myQuery, callback, fetcher, onDone) {
   /** prepare -- sets the index of the item to the possible matches
       * @param f - formula
       * @param item - an Statement, possibly w/ vars in it
-      * @param bindings -
-  * @returns true if the query fails -- there are no items that match **/
+      * @param bindings - Bindings so far
+  * @returns false if the query fails -- there are no items that match **/
   var prepare = function prepare(f, item, bindings) {
-    var t, terms, termIndex, i, ind;
+    var terms, termIndex, i, ind;
     item.nvars = 0;
     item.index = null;
     // if (!f.statements) log.warn("@@@ prepare: f is "+f)
     //    log.debug("Prepare: f has "+ f.statements.length)
     // log.debug("Prepare: Kb size "+f.statements.length+" Preparing "+item)
 
-    terms = [item.subject, item.predicate, item.object];
-    ind = [f.subjectIndex, f.predicateIndex, f.objectIndex];
-    for (i = 0; i < 3; i++) {
-      // alert("Prepare "+terms[i]+" "+(terms[i] in bindings))
-      if (terms[i].isVar && !(bindings[terms[i]] !== undefined)) {
+    terms = [item.subject, item.predicate, item.object, item.why];
+    ind = [f.subjectIndex, f.predicateIndex, f.objectIndex, f.whyIndex];
+    for (i = 0; i < 4; i++) {
+      var t = terms[i];
+      // console.log("  Prepare (" + t + ") "+(t in bindings))
+      if (t.uri && t.uri === defaultDocumentURI) {// chrome:session
+        // console.log('     query: Ignoring slot ' + i)
+      } else if (t.isVar && !(bindings[t] !== undefined)) {
         item.nvars++;
       } else {
         t = bind(terms[i], bindings); // returns the RDF binding if bound, otherwise itself
@@ -73680,13 +73711,14 @@ function indexedFormulaQuery(myQuery, callback, fetcher, onDone) {
           return false; // Query line cannot match
         }
         if (item.index === null || item.index.length > termIndex.length) {
+          // Find smallest index
           item.index = termIndex;
         }
       }
     }
 
     if (item.index === null) {
-      // All 3 are variables?
+      // All 4 are variables?
       item.index = f.statements;
     }
     return true;
@@ -73812,8 +73844,9 @@ function indexedFormulaQuery(myQuery, callback, fetcher, onDone) {
     for (i = 0; i < n; i++) {
       // For each statement left in the query, run prepare
       item = pattern[i];
-      log.info('match2: item=' + item + ', bindingsSoFar=' + bindingDebug(bindingsSoFar));
+      // log.info('match2: item=' + item + ', bindingsSoFar=' + bindingDebug(bindingsSoFar))
       prepare(f, item, bindingsSoFar);
+      // if (item.index) console.log('     item.index.length ' + item.index.length)
     }
     pattern.sort(easiestQuery);
     item = pattern[0];
@@ -73833,7 +73866,7 @@ function indexedFormulaQuery(myQuery, callback, fetcher, onDone) {
     for (c = 0; c < nc; c++) {
       // For each candidate statement
       st = item.index[c]; // for each statement in the item's index, spawn a new match with that binding
-      nbs1 = unifyContents([item.subject, item.predicate, item.object], [st.subject, st.predicate, st.object], bindingsSoFar, f);
+      nbs1 = unifyContents([item.subject, item.predicate, item.object, item.why], [st.subject, st.predicate, st.object, st.why], bindingsSoFar, f);
       log.info(level + ' From first: ' + nbs1.length + ': ' + bindingsDebug(nbs1));
       nk = nbs1.length;
       // branch.count += nk
@@ -75887,7 +75920,11 @@ var Serializer = function () {
       case 'Variable':
         return expr.toNT();
       case 'Literal':
-        var val = expr.value.toString(); // should be a string already
+        var val = expr.value;
+        if (typeof val !== 'string') {
+          throw new TypeError('Value of RDF literal node must be a string');
+        }
+        // var val = expr.value.toString() // should be a string already
         if (expr.datatype && this.flags.indexOf('x') < 0) {
           // Supress native numbers
           switch (expr.datatype.uri) {
@@ -75907,7 +75944,7 @@ var Serializer = function () {
               return val;
 
             case 'http://www.w3.org/2001/XMLSchema#boolean':
-              return expr.value ? 'true' : 'false';
+              return expr.value === '1' ? 'true' : 'false';
           }
         }
         var str = this.stringToN3(expr.value);
