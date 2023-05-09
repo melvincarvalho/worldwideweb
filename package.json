@@ -1,0 +1,31 @@
+{
+  "name": "worldwideweb",
+  "version": "0.0.13",
+  "description": "WorldWideWeb browser in JavaScript",
+  "main": "main.cjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "electron .",
+    "start": "electron ."
+  },
+  "bin": {
+    "worldwideweb": "./worldwideweb.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/melvincarvalho/worldwideweb.git"
+  },
+  "keywords": [
+    "WorldWideWeb",
+    "Solid"
+  ],
+  "author": "Melvin Carvalho <melvincarvalho@gmail.com> (https://melvincarvalho.com/#me)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/melvincarvalho/worldwideweb/issues"
+  },
+  "homepage": "https://github.com/melvincarvalho/worldwideweb#readme",
+  "devDependencies": {
+    "electron": "^24.2.0"
+  }
+}
