@@ -9,7 +9,7 @@
     "start": "electron ."
   },
   "bin": {
-    "worldwideweb": "./worldwideweb.sh"
+    "worldwideweb": "./run.js"
   },
   "repository": {
     "type": "git",
