@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 const { app, BrowserWindow, Menu } = require('electron')
+const path = require('path')
+const url = require('url')
 
-function createWindow () {
+function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
@@ -11,7 +13,19 @@ function createWindow () {
     }
   })
 
-  mainWindow.loadURL('https://databrowser.io/') // Load a URL to start with
+  const start = 'https://solidos.solidcommunity.net/public/Roadmap/Tasks/'
+  // mainWindow.loadURL('https://solidos.github.io/mashlib/dist/browse.html')
+  // Load a URL to start with
+
+  const uri = url.format({
+    pathname: path.join('https://', 'index.html'),
+    protocol: 'file:',
+    slashes: true,
+    query: { uri: start }
+  })
+
+  console.log('loading', uri)
+  mainWindow.loadURL('https://solidos.github.io/mashlib/dist/browse.html?uri=' + start)
 
   const mainMenu = Menu.buildFromTemplate(menuTemplate)
   Menu.setApplicationMenu(mainMenu)
@@ -23,7 +37,7 @@ const menuTemplate = [
     submenu: [
       {
         label: 'Exit',
-        click () {
+        click() {
           app.quit()
         }
       }
@@ -35,21 +49,21 @@ const menuTemplate = [
       {
         label: 'Back',
         accelerator: 'CmdOrCtrl+[',
-        click (item, focusedWindow) {
+        click(item, focusedWindow) {
           if (focusedWindow) focusedWindow.webContents.goBack()
         }
       },
       {
         label: 'Forward',
         accelerator: 'CmdOrCtrl+]',
-        click (item, focusedWindow) {
+        click(item, focusedWindow) {
           if (focusedWindow) focusedWindow.webContents.goForward()
         }
       },
       {
         label: 'Reload',
         accelerator: 'CmdOrCtrl+R',
-        click (item, focusedWindow) {
+        click(item, focusedWindow) {
           if (focusedWindow) focusedWindow.reload()
         }
       }
