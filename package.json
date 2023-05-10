@@ -1,6 +1,6 @@
 {
   "name": "worldwideweb",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "WorldWideWeb browser in JavaScript",
   "main": "main.cjs",
   "scripts": {
