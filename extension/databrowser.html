@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html id="docHTML">
+<head>
+  <meta charset="UTF-8">
+  <title>Turtle Data Browser</title>
+  <link rel="stylesheet" type="text/css" href="mashlib.min.css" />
+  <script type="text/javascript" src="mashlib.min.js"></script>
+  <script type="text/javascript" src="databrowser.js"></script>
+</head>
+<body>
+
+  <div style="width:100%;" id="inputArea">
+    <div style="margin-bottom:0.6em">
+        The SolidOS Databrowser
+    </div>
+    <div style="margin-left:1em">
+        Viewing <input id="uriField" type="text" style="font-size:100%; min-width:25em; padding:0.5em;" placeholder="enter a pod address e.g. https://you.solidcommunity.net/"/> <input type="button" id="goButton" value="Go" />
+    </div>                                                                  
+    <div style="margin-top:0.5em;margin-left:1em">
+      As user <span id="webId">&lt;public user></span> <span id="loginButtonArea"></span>
+    </div>
+  </div>
+
+  <div class="TabulatorOutline" id="DummyUUID" role="main">
+      <table id="outline"></table>
+      <div id="GlobalDashboard"></div>
+  </div>
+
+  <style>
+    #inputArea {
+      width:100%;
+      padding:0.5em;
+      background-color:#d0d0d0;
+    }
+    #loginButtonArea input {
+      display:inline-block;
+      margin:0.25em !important;
+      padding:0.25em !important;
+    }
+    #webId {
+      display:inline-block;
+      padding-top:0.6em;
+      padding-bottom:0.6em;
+    }
+    #uriField {
+      width:70%;
+      margin-top:0.6em !important;
+    }
+  </style>
+
+</body>
+</html>
+

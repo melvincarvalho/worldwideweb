@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "Turtle Data Browser",
+  "description": "Displays a data browser for resources with MIME type text/turtle.",
+  "version": "1.0",
+  "permissions": [
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "web_accessible_resources": [
+    "databrowser.html",
+    "mashlib.min.js",
+    "mashlib.min.css"
+  ],
+  "content_security_policy": "script-src 'self'; object-src 'self'"
+}
+
