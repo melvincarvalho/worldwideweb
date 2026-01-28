@@ -1,0 +1,6 @@
+{
+  "port": 3012,
+  "width": 1200,
+  "height": 800,
+  "root": "./data"
+}

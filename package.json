@@ -1,35 +1,29 @@
 {
   "name": "worldwideweb",
-  "version": "0.0.20",
-  "description": "WorldWideWeb browser in JavaScript",
-  "main": "main.cjs",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "electron .",
-    "start": "electron ."
-  },
+  "version": "0.0.21",
+  "description": "WorldWideWeb browser in JavaScript - JSS + mashlib in Electron",
+  "main": "main.js",
   "bin": {
-    "worldwideweb": "./run.js"
+    "worldwideweb": "./bin/worldwideweb.js"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "electron ."
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/melvincarvalho/worldwideweb.git"
   },
-  "keywords": [
-    "WorldWideWeb",
-    "Solid"
-  ],
+  "keywords": ["WorldWideWeb", "Solid", "browser", "jss", "mashlib", "electron"],
   "author": "Melvin Carvalho <melvincarvalho@gmail.com> (https://melvincarvalho.com/#me)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/melvincarvalho/worldwideweb/issues"
   },
   "homepage": "https://github.com/melvincarvalho/worldwideweb#readme",
-  "devDependencies": {
-    "electron": "^24.2.0"
-  },
   "dependencies": {
-    "path": "^0.12.7",
-    "url": "^0.11.0"
+    "electron": "^28.0.0",
+    "javascript-solid-server": "^0.0.81",
+    "mashlib-jss": "^0.1.1"
   }
 }
